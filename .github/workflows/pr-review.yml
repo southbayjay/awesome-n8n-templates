@@ -10,6 +10,8 @@
 #
 # Required repo secret:
 #   MODEL_API_KEY — API key for the provider configured in MODEL_ENDPOINT
+#   (forks without this secret: the hourly sweep is skipped with a warning
+#   instead of failing; PR-triggered and manual runs still error out.)
 #
 # Defaults below use the Google Gemini OpenAI-compatible endpoint (free tier).
 # To switch providers, change MODEL_ENDPOINT + the two model IDs only:
@@ -759,6 +761,7 @@ jobs:
           REPO: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
           RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
           # On schedule, inputs.* are empty → default to a backlog sweep.
           MODE: ${{ inputs.mode || (github.event_name == 'schedule' && 'backlog' || 'latest') }}
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
@@ -772,6 +775,10 @@ jobs:
           set -euo pipefail
 
           if [ -z "${MODEL_API_KEY:-}" ]; then
+            if [ "${EVENT_NAME}" = "schedule" ]; then
+              echo "::warning::MODEL_API_KEY secret is not set — skipping scheduled sweep. Add it under Settings → Secrets and variables → Actions to enable automated reviews on this repository."
+              exit 0
+            fi
             echo "::error::MODEL_API_KEY secret is not set. Add it under Settings → Secrets and variables → Actions."
             exit 1
           fi
